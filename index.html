@@ -11,6 +11,7 @@
 <link rel="manifest" href='data:application/manifest+json,{"name":"RH Scoreboard","short_name":"Scoreboard","display":"standalone","background_color":"%230f1115","theme_color":"%230f1115","start_url":"."}'>
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%235b9dd9'/%3E%3Ctext x='50' y='68' font-size='50' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3ERH%3C/text%3E%3C/svg%3E">
 <title>RH Scoreboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
   :root{
     --bg:#0f1115; --card:#1a1d24; --card2:#22262f; --text:#e8eaed; --muted:#9aa0a8;
@@ -79,6 +80,7 @@
 <div class="tabs">
   <div class="tab active" id="tabW" onclick="showTab('w')">Weekly</div>
   <div class="tab" id="tabQ" onclick="showTab('q')">Quarterly</div>
+  <div class="tab" id="tabT" onclick="showTab('t')">Trends</div>
 </div>
 
 <!-- ================= WEEKLY ================= -->
@@ -184,6 +186,18 @@
   </div>
 </div>
 
+<!-- ================= TRENDS ================= -->
+<div id="paneT" style="display:none">
+  <div class="card"><h2>Net worth <span class="target">household & personal, $M</span></h2><canvas id="cNW" height="190"></canvas></div>
+  <div class="card"><h2>Body comp <span class="target">bodyfat % & weight</span></h2><canvas id="cBody" height="190"></canvas></div>
+  <div class="card"><h2>Strength <span class="target">lbs</span></h2><canvas id="cStr" height="190"></canvas></div>
+  <div class="card"><h2>Reps <span class="target">pull-ups & pushups</span></h2><canvas id="cReps" height="190"></canvas></div>
+  <div class="card"><h2>Engine <span class="target">mile & 1000m row (lower = better)</span></h2><canvas id="cEng" height="190"></canvas></div>
+  <div class="card"><h2>Cooper 12-min <span class="target">meters</span></h2><canvas id="cCooper" height="190"></canvas></div>
+  <div class="card"><h2>Fasting glucose <span class="target">mg/dL · target <100</span></h2><canvas id="cGluc" height="190"></canvas></div>
+  <div class="hint" id="trendHint"></div>
+</div>
+
 <script>
 const KEY='rh_scoreboard_v1';
 const DAYS=['S','M','T','W','T','F','S'];
@@ -218,9 +232,12 @@ function parseSleep(s){ const m=s.match(/^(\d+):(\d\d)$/); return m? (+m[1]+(+m[
 function showTab(t){
   document.getElementById('paneW').style.display = t==='w'?'':'none';
   document.getElementById('paneQ').style.display = t==='q'?'':'none';
+  document.getElementById('paneT').style.display = t==='t'?'':'none';
   document.getElementById('tabW').classList.toggle('active',t==='w');
   document.getElementById('tabQ').classList.toggle('active',t==='q');
+  document.getElementById('tabT').classList.toggle('active',t==='t');
   if(t==='q') renderQ();
+  if(t==='t') renderTrends();
 }
 function shiftWeek(d){ weekOffset+=d; renderW(); }
 
@@ -346,6 +363,63 @@ function renderQ(){
     t.insertAdjacentHTML('beforeend',
       `<tr><td>${e.date}</td><td>${money(e.personal)}</td><td>${money(e.household)}</td><td>${e.bf||'—'}</td><td>${e.wt||'—'}</td><td>${e.dl||'—'}</td><td>${e.mile||'—'}</td><td>${e.row||'—'}</td><td>${e.pull||'—'}</td><td>${e.cooper||'—'}</td><td>${e.gluc||'—'}</td></tr>`);
   });
+}
+
+// ---------- Trends ----------
+let charts={};
+function parseMS(s){ const m=(s||'').match(/^(\d+):(\d\d)$/); return m? (+m[1]*60 + +m[2]) : null; }
+function fmtMS(sec){ if(sec==null) return ''; const m=Math.floor(sec/60), s=Math.round(sec%60); return m+':'+String(s).padStart(2,'0'); }
+const C={blue:'#5b9dd9',green:'#34c778',red:'#e5534b',amber:'#e0a83a',muted:'#9aa0a8',purple:'#a78bfa'};
+function ds(label,data,color,extra){ return Object.assign({label,data,borderColor:color,backgroundColor:color,tension:.25,spanGaps:true,pointRadius:4},extra||{}); }
+function mkChart(id,labels,datasets,opts){
+  const el=document.getElementById(id); if(!el) return;
+  if(charts[id]) charts[id].destroy();
+  const hasData=datasets.some(d=>d.data.some(v=>v!=null));
+  const card=el.closest('.card');
+  card.style.display = hasData? '' : 'none';
+  if(!hasData) return;
+  const textColor=getComputedStyle(document.body).getPropertyValue('--muted').trim()||'#9aa0a8';
+  charts[id]=new Chart(el,Object.assign({type:'line',
+    data:{labels,datasets},
+    options:Object.assign({
+      responsive:true,aspectRatio:1.7,
+      plugins:{legend:{labels:{color:textColor,boxWidth:12}}},
+      scales:{x:{ticks:{color:textColor},grid:{display:false}},y:{ticks:{color:textColor},grid:{color:'rgba(150,150,150,.15)'}}}
+    },opts&&opts.options||{})
+  }));
+}
+function renderTrends(){
+  const qs=state.quarters.slice().sort((a,b)=>a.date<b.date?-1:1);
+  document.getElementById('trendHint').textContent = qs.length<2
+    ? (qs.length===0? 'No quarterly entries yet — fill one in on the Quarterly tab and lines appear here.' : 'One entry so far — trends start drawing with the second quarterly check-in.')
+    : qs.length+' quarterly check-ins recorded.';
+  const L=qs.map(e=>e.date.slice(2)); // YY-MM-DD
+  const v=(f)=>qs.map(e=>{ const x=f(e); return (x===0||x==null||x==='')?null:x; });
+
+  mkChart('cNW',L,[
+    ds('Household $M',v(e=>e.household? +(e.household/1e6).toFixed(2):null),C.blue),
+    ds('Personal $M',v(e=>e.personal? +(e.personal/1e6).toFixed(2):null),C.muted,{borderDash:[6,4]})
+  ]);
+  mkChart('cBody',L,[
+    ds('Bodyfat %',v(e=>e.bf),C.amber,{yAxisID:'y'}),
+    ds('Weight lbs',v(e=>e.wt),C.muted,{yAxisID:'y1',borderDash:[6,4]})
+  ],{options:{scales:{y1:{position:'right',grid:{display:false},ticks:{color:'#9aa0a8'}}}}});
+  mkChart('cStr',L,[
+    ds('Deadlift',v(e=>e.dl),C.blue),
+    ds('Bench',v(e=>e.bench),C.green),
+    ds('Squat',v(e=>e.squat),C.purple)
+  ]);
+  mkChart('cReps',L,[
+    ds('Pull-ups',v(e=>e.pull),C.blue),
+    ds('Pushups (2 min)',v(e=>e.push),C.green,{yAxisID:'y1'})
+  ],{options:{scales:{y1:{position:'right',grid:{display:false},ticks:{color:'#9aa0a8'}}}}});
+  const msTicks={ticks:{callback:(val)=>fmtMS(val),color:'#9aa0a8'}};
+  mkChart('cEng',L,[
+    ds('Mile',v(e=>parseMS(e.mile)),C.red),
+    ds('1000m row',v(e=>parseMS(e.row)),C.blue)
+  ],{options:{scales:{y:Object.assign({reverse:true,grid:{color:'rgba(150,150,150,.15)'}},msTicks)}}});
+  mkChart('cCooper',L,[ds('Cooper meters',v(e=>e.cooper),C.green)]);
+  mkChart('cGluc',L,[ds('Fasting glucose',v(e=>e.gluc),C.amber)]);
 }
 
 function exportData(){
