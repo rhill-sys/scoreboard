@@ -198,6 +198,16 @@
   <div class="hint" id="trendHint"></div>
 </div>
 
+<!-- ================= SYNC ================= -->
+<div class="card">
+  <h2>Sync <span class="target" id="syncStatus">local only</span></h2>
+  <div class="sleepwrap" id="syncSetup">
+    <input type="password" id="tokenInput" placeholder="Paste GitHub token" style="flex:1">
+    <button class="btn secondary" style="width:auto;margin-top:0;padding:8px 14px" onclick="connectSync()">Connect</button>
+  </div>
+  <div class="hint">Syncs everything to your private repo <b>scoreboard-data</b> so phone, iPad, and computer share one dataset. The token is stored only on this device. To create one: GitHub → Settings → Developer settings → Fine-grained tokens → Generate new token → Repository access: <i>only scoreboard-data</i> → Permissions: Contents = Read and write. Paste it here once per device.</div>
+</div>
+
 <script>
 const KEY='rh_scoreboard_v1';
 const DAYS=['S','M','T','W','T','F','S'];
@@ -205,7 +215,70 @@ const MILESTONES=[[2028,4.3],[2031,5.6],[2034,6.8],[2036,8.0],[2039,10.0]];
 let state=load(); let weekOffset=0;
 
 function load(){ try{return JSON.parse(localStorage.getItem(KEY))||{weeks:{},quarters:[]};}catch(e){return {weeks:{},quarters:[]};} }
-function persist(){ localStorage.setItem(KEY,JSON.stringify(state)); }
+function persist(){ state.updatedAt=Date.now(); localStorage.setItem(KEY,JSON.stringify(state)); scheduleSync(); }
+
+// ---------- GitHub sync (private repo scoreboard-data) ----------
+const SYNC_REPO='rhill-sys/scoreboard-data', SYNC_FILE='data.json', TKEY='rh_sync_token';
+let syncSha=null, syncTimer=null;
+function token(){ return localStorage.getItem(TKEY)||''; }
+function setSyncStatus(s,color){ const el=document.getElementById('syncStatus'); if(el){ el.textContent=s; el.style.color=color||''; } }
+function b64e(s){ return btoa(unescape(encodeURIComponent(s))); }
+function b64d(s){ return decodeURIComponent(escape(atob(s))); }
+async function ghFetch(method,body){
+  return fetch('https://api.github.com/repos/'+SYNC_REPO+'/contents/'+SYNC_FILE,{
+    method, headers:{'Authorization':'Bearer '+token(),'Accept':'application/vnd.github+json'},
+    body: body? JSON.stringify(body):undefined });
+}
+async function pullRemote(){
+  const r=await ghFetch('GET');
+  if(r.status===404){ syncSha=null; return null; }
+  if(!r.ok) throw new Error('GET '+r.status);
+  const j=await r.json(); syncSha=j.sha;
+  return JSON.parse(b64d(j.content.replace(/\n/g,'')));
+}
+async function pushRemote(){
+  const body={message:'sync '+new Date().toISOString(), content:b64e(JSON.stringify(state))};
+  if(syncSha) body.sha=syncSha;
+  let r=await ghFetch('PUT',body);
+  if(r.status===409||r.status===422){
+    const remote=await pullRemote();
+    if(remote&&(remote.updatedAt||0)>(state.updatedAt||0)){ state=remote; localStorage.setItem(KEY,JSON.stringify(state)); renderW(); }
+    body.sha=syncSha;
+    r=await ghFetch('PUT',body);
+  }
+  if(!r.ok) throw new Error('PUT '+r.status);
+  const j=await r.json(); syncSha=j.content.sha;
+}
+function scheduleSync(){
+  if(!token()) return;
+  setSyncStatus('syncing…','var(--amber)');
+  clearTimeout(syncTimer);
+  syncTimer=setTimeout(async()=>{
+    try{ await pushRemote(); setSyncStatus('synced '+new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}),'var(--green)'); }
+    catch(e){ setSyncStatus('sync error — retries on next change','var(--red)'); }
+  },2500);
+}
+async function initSync(){
+  if(!token()){ setSyncStatus('local only'); return; }
+  const setup=document.getElementById('syncSetup'); if(setup) setup.style.display='none';
+  try{
+    setSyncStatus('syncing…','var(--amber)');
+    const remote=await pullRemote();
+    if(remote && (remote.updatedAt||0) > (state.updatedAt||0)){
+      state=remote; localStorage.setItem(KEY,JSON.stringify(state)); renderW();
+    } else {
+      await pushRemote();
+    }
+    setSyncStatus('synced','var(--green)');
+  }catch(e){ setSyncStatus('sync error — check token','var(--red)'); }
+}
+function connectSync(){
+  const t=document.getElementById('tokenInput').value.trim();
+  if(!t) return;
+  localStorage.setItem(TKEY,t);
+  document.getElementById('tokenInput').value='';
+  initSync();
+}
 
 function mondayOf(d){ const x=new Date(d); const day=x.getDay(); x.setDate(x.getDate()-day); x.setHours(0,0,0,0); return x; } // week starts Sunday
 function curWeekKey(){ const m=mondayOf(new Date()); m.setDate(m.getDate()+weekOffset*7); return m.toISOString().slice(0,10); }
@@ -435,6 +508,7 @@ function importData(ev){
 }
 
 renderW();
+initSync();
 </script>
 </body>
 </html>
