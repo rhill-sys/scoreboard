@@ -205,6 +205,10 @@
     <input type="password" id="tokenInput" placeholder="Paste GitHub token" style="flex:1">
     <button class="btn secondary" style="width:auto;margin-top:0;padding:8px 14px" onclick="connectSync()">Connect</button>
   </div>
+  <div class="io" id="syncActions" style="display:none">
+    <button class="btn secondary" onclick="initSync()">Retry sync</button>
+    <button class="btn secondary" onclick="resetSync()">Reset token</button>
+  </div>
   <div class="hint">Syncs everything to your private repo <b>scoreboard-data</b> so phone, iPad, and computer share one dataset. The token is stored only on this device. To create one: GitHub → Settings → Developer settings → Fine-grained tokens → Generate new token → Repository access: <i>only scoreboard-data</i> → Permissions: Contents = Read and write. Paste it here once per device.</div>
 </div>
 
@@ -229,10 +233,21 @@ async function ghFetch(method,body){
     method, headers:{'Authorization':'Bearer '+token(),'Accept':'application/vnd.github+json'},
     body: body? JSON.stringify(body):undefined });
 }
+function explain(status){
+  if(status===401) return 'token invalid or expired (401)';
+  if(status===403) return 'token lacks Contents read/write permission (403)';
+  if(status===404) return 'repo not reachable (404) — token must have Repository access: scoreboard-data';
+  return 'error '+status;
+}
 async function pullRemote(){
   const r=await ghFetch('GET');
-  if(r.status===404){ syncSha=null; return null; }
-  if(!r.ok) throw new Error('GET '+r.status);
+  if(r.status===404){
+    // 404 = file doesn't exist yet OR token can't see the repo. Distinguish via repo endpoint.
+    const probe=await fetch('https://api.github.com/repos/'+SYNC_REPO,{headers:{'Authorization':'Bearer '+token(),'Accept':'application/vnd.github+json'}});
+    if(!probe.ok) throw new Error(explain(probe.status));
+    syncSha=null; return null;
+  }
+  if(!r.ok) throw new Error(explain(r.status));
   const j=await r.json(); syncSha=j.sha;
   return JSON.parse(b64d(j.content.replace(/\n/g,'')));
 }
@@ -246,7 +261,7 @@ async function pushRemote(){
     body.sha=syncSha;
     r=await ghFetch('PUT',body);
   }
-  if(!r.ok) throw new Error('PUT '+r.status);
+  if(!r.ok) throw new Error(explain(r.status));
   const j=await r.json(); syncSha=j.content.sha;
 }
 function scheduleSync(){
@@ -258,9 +273,13 @@ function scheduleSync(){
     catch(e){ setSyncStatus('sync error — retries on next change','var(--red)'); }
   },2500);
 }
+function syncUI(mode){ // 'setup' | 'connected' | 'error'
+  const setup=document.getElementById('syncSetup'), acts=document.getElementById('syncActions');
+  if(setup) setup.style.display = mode==='connected'?'none':'';
+  if(acts) acts.style.display = mode==='error'?'':'none';
+}
 async function initSync(){
-  if(!token()){ setSyncStatus('local only'); return; }
-  const setup=document.getElementById('syncSetup'); if(setup) setup.style.display='none';
+  if(!token()){ setSyncStatus('local only'); syncUI('setup'); return; }
   try{
     setSyncStatus('syncing…','var(--amber)');
     const remote=await pullRemote();
@@ -269,8 +288,12 @@ async function initSync(){
     } else {
       await pushRemote();
     }
-    setSyncStatus('synced','var(--green)');
-  }catch(e){ setSyncStatus('sync error — check token','var(--red)'); }
+    setSyncStatus('synced ✓','var(--green)');
+    syncUI('connected');
+  }catch(e){
+    setSyncStatus(e.message||'sync error','var(--red)');
+    syncUI('error');
+  }
 }
 function connectSync(){
   const t=document.getElementById('tokenInput').value.trim();
@@ -278,6 +301,10 @@ function connectSync(){
   localStorage.setItem(TKEY,t);
   document.getElementById('tokenInput').value='';
   initSync();
+}
+function resetSync(){
+  localStorage.removeItem(TKEY); syncSha=null;
+  setSyncStatus('local only'); syncUI('setup');
 }
 
 function mondayOf(d){ const x=new Date(d); const day=x.getDay(); x.setDate(x.getDate()-day); x.setHours(0,0,0,0); return x; } // week starts Sunday
