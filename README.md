@@ -21,3 +21,4 @@ The page itself contains no personal data — it's an empty scoreboard, so a pub
 - localStorage can be wiped by clearing browser data. **Export a JSON backup after every quarterly entry** (button at the bottom of the Quarterly tab) and drop it in this folder.
 
 <!-- redeploy -->
+<!-- redeploy 2 -->
