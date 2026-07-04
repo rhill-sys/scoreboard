@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Scoreboard">
+<meta name="theme-color" content="#0f1115">
+<link rel="manifest" href='data:application/manifest+json,{"name":"RH Scoreboard","short_name":"Scoreboard","display":"standalone","background_color":"%230f1115","theme_color":"%230f1115","start_url":"."}'>
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%235b9dd9'/%3E%3Ctext x='50' y='68' font-size='50' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='bold'%3ERH%3C/text%3E%3C/svg%3E">
+<title>RH Scoreboard</title>
+<style>
+  :root{
+    --bg:#0f1115; --card:#1a1d24; --card2:#22262f; --text:#e8eaed; --muted:#9aa0a8;
+    --green:#34c778; --red:#e5534b; --amber:#e0a83a; --blue:#5b9dd9; --border:#2c313a;
+  }
+  @media (prefers-color-scheme: light){
+    :root{ --bg:#f5f6f8; --card:#ffffff; --card2:#eef0f3; --text:#1a1d24; --muted:#5f6670; --border:#d8dce2; }
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  body{background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; padding:16px; padding-top:calc(16px + env(safe-area-inset-top)); padding-bottom:calc(24px + env(safe-area-inset-bottom)); max-width:640px; margin:0 auto; touch-action:manipulation;}
+  h1{font-size:1.3rem; margin-bottom:2px;}
+  .sub{color:var(--muted); font-size:.85rem; margin-bottom:14px;}
+  .tabs{display:flex; gap:8px; margin-bottom:16px;}
+  .tab{flex:1; padding:10px; text-align:center; background:var(--card); border:1px solid var(--border); border-radius:10px; cursor:pointer; font-weight:600;}
+  .tab.active{background:var(--blue); color:#fff; border-color:var(--blue);}
+  .card{background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:14px;}
+  .card h2{font-size:1rem; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;}
+  .target{color:var(--muted); font-size:.78rem; font-weight:400;}
+  .weeknav{display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;}
+  .weeknav button{background:var(--card); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:6px 14px; cursor:pointer; font-size:1rem;}
+  .weeknav .label{font-weight:700;}
+  .daygrid{display:grid; grid-template-columns:86px repeat(7,1fr); gap:5px; align-items:center; font-size:.8rem;}
+  .daygrid .hd{color:var(--muted); text-align:center; font-size:.72rem;}
+  .rowlabel{font-size:.78rem; color:var(--text);}
+  .cell{min-height:44px; border:1px solid var(--border); border-radius:8px; background:var(--card2); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:1.1rem; user-select:none;}
+  .cell.on{background:var(--green); border-color:var(--green); color:#fff;}
+  .checkrow{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:10px 0; border-bottom:1px solid var(--border);}
+  .checkrow:last-child{border-bottom:none;}
+  .stackrow{padding:10px 0; border-bottom:1px solid var(--border);}
+  .stackrow:last-child{border-bottom:none;}
+  .stackrow .label{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; font-size:.9rem;}
+  .boxes{display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;}
+  .stackrow .boxes{justify-content:flex-start;}
+  .box{width:44px; height:44px; border:1px solid var(--border); border-radius:10px; background:var(--card2); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:1.2rem; user-select:none;}
+  .box.on{background:var(--green); border-color:var(--green); color:#fff;}
+  .mincount{color:var(--muted); font-size:.78rem;}
+  input[type=text], input[type=number], input[type=date], textarea{
+    background:var(--card2); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:8px; font-size:.95rem; width:100%;
+  }
+  .sleepwrap{display:flex; gap:10px; align-items:center;}
+  .sleepwrap input{width:90px; text-align:center;}
+  .verdict{font-size:1rem; font-weight:700; padding:12px; border-radius:10px; background:var(--card2); text-align:center;}
+  .score-good{color:var(--green);} .score-mid{color:var(--amber);} .score-bad{color:var(--red);}
+  .qgrid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+  .qgrid label{font-size:.75rem; color:var(--muted); display:block; margin-bottom:3px;}
+  .full{grid-column:1 / -1;}
+  .btn{background:var(--blue); color:#fff; border:none; border-radius:10px; padding:12px 18px; font-size:.95rem; font-weight:700; cursor:pointer; width:100%; margin-top:12px;}
+  .btn.secondary{background:var(--card2); color:var(--text); border:1px solid var(--border);}
+  .nw{font-size:1.5rem; font-weight:800; text-align:center; padding:8px;}
+  .nwsub{text-align:center; color:var(--muted); font-size:.8rem; margin-bottom:6px;}
+  table{width:100%; border-collapse:collapse; font-size:.78rem;}
+  th,td{padding:6px 8px; text-align:right; border-bottom:1px solid var(--border);}
+  th:first-child,td:first-child{text-align:left;}
+  th{color:var(--muted); font-weight:600;}
+  .io{display:flex; gap:10px; margin-top:8px;}
+  .io .btn{margin-top:0;}
+  .milestone{display:flex; justify-content:space-between; font-size:.85rem; padding:6px 0; border-bottom:1px solid var(--border);}
+  .milestone:last-child{border-bottom:none;}
+  .hint{color:var(--muted); font-size:.75rem; margin-top:8px;}
+</style>
+</head>
+<body>
+<h1>RH Scoreboard</h1>
+<div class="sub">Sleep 7 hours, do the aerobic work, automate the savings, build the factory, build the club.</div>
+
+<div class="tabs">
+  <div class="tab active" id="tabW" onclick="showTab('w')">Weekly</div>
+  <div class="tab" id="tabQ" onclick="showTab('q')">Quarterly</div>
+</div>
+
+<!-- ================= WEEKLY ================= -->
+<div id="paneW">
+  <div class="weeknav">
+    <button onclick="shiftWeek(-1)">←</button>
+    <span class="label" id="weekLabel"></span>
+    <button onclick="shiftWeek(1)">→</button>
+  </div>
+
+  <div class="card">
+    <h2>Daily habits</h2>
+    <div class="daygrid" id="dayGrid"></div>
+    <div class="hint">Slow-carb: target 6 of 7 (one cheat meal, not a cheat day). In bed reading by the alarm: target 5+.</div>
+  </div>
+
+  <div class="card">
+    <h2>Training <span class="target">tennis counts toward Zone 1–3 · walks don't count</span></h2>
+    <div class="stackrow">
+      <div class="label"><span>Zone 1–3 <span class="target">each ✓ = 15 min · target 120</span></span><span class="mincount" id="z13Count"></span></div>
+      <div class="boxes" id="z13boxes"></div>
+    </div>
+    <div class="checkrow"><span>Zone 4/5 — 4×4s <span class="target">target 2, 48h apart</span></span><div class="boxes" id="z45boxes"></div></div>
+    <div class="stackrow">
+      <div class="label"><span>Strength <span class="target">each ✓ = 15 min · target 120</span></span><span class="mincount" id="stCount"></span></div>
+      <div class="boxes" id="stboxes"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Sleep <span class="target" id="sleepTarget"></span></h2>
+    <div class="sleepwrap">
+      <span>Whoop weekly avg:</span>
+      <input type="text" id="sleepInput" placeholder="6:15" onchange="saveSleep()">
+      <span id="sleepFlag"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Money <span class="target">weekly total: $547</span></h2>
+    <div class="checkrow"><span>$455 → brokerage (VTI/VXUS auto-invest fired)</span><div class="boxes" id="brokbox"></div></div>
+    <div class="checkrow"><span>$92 → HYSA (until reserve hits $30K, then stop)</span><div class="boxes" id="hysabox"></div></div>
+    <div class="hint">$455/wk = the $1,966/mo brokerage auto-invest. $92/wk = the $400/mo HYSA build. Once autotransfers exist, these boxes are verification, not action.</div>
+  </div>
+
+  <div class="card">
+    <h2>Financial setup — one-time to-dos</h2>
+    <div id="todoList"></div>
+  </div>
+
+  <div class="verdict" id="verdict"></div>
+</div>
+
+<!-- ================= QUARTERLY ================= -->
+<div id="paneQ" style="display:none">
+  <div class="card">
+    <h2>New quarterly entry</h2>
+    <div class="qgrid">
+      <div class="full"><label>Date</label><input type="date" id="qDate"></div>
+      <div><label>Home value</label><input type="number" id="qHome"></div>
+      <div><label>Mortgage (positive number)</label><input type="number" id="qMort"></div>
+      <div><label>Cash</label><input type="number" id="qCash"></div>
+      <div><label>Credit card debt (positive number)</label><input type="number" id="qCC"></div>
+      <div><label>Brokerage</label><input type="number" id="qBrok"></div>
+      <div><label>403(b)</label><input type="number" id="q403"></div>
+      <div><label>529 Zoe</label><input type="number" id="q529z"></div>
+      <div><label>529 Jackson</label><input type="number" id="q529j"></div>
+      <div class="full"><label>Joanne's accounts</label><input type="number" id="qJo"></div>
+      <div><label>Weight (lbs)</label><input type="number" step="0.1" id="qWt"></div>
+      <div><label>Bodyfat % (DEXA preferred)</label><input type="number" step="0.1" id="qBF"></div>
+      <div><label>Deadlift (lbs)</label><input type="number" id="qDL"></div>
+      <div><label>Bench (lbs)</label><input type="number" id="qBench"></div>
+      <div><label>Squat (lbs)</label><input type="number" id="qSquat"></div>
+      <div><label>Pull-ups</label><input type="number" id="qPull"></div>
+      <div><label>Pushups (2 min)</label><input type="number" id="qPush"></div>
+      <div><label>Plank (m:ss)</label><input type="text" id="qPlank" placeholder="5:00"></div>
+      <div><label>1000m row (m:ss)</label><input type="text" id="qRow" placeholder="3:35"></div>
+      <div><label>Mile (m:ss)</label><input type="text" id="qMile" placeholder="7:35"></div>
+      <div><label>Dead hang (m:ss)</label><input type="text" id="qHang" placeholder="1:20"></div>
+      <div><label>Cooper 12-min (meters)</label><input type="number" id="qCooper"></div>
+      <div><label>Fasting glucose (annual)</label><input type="number" id="qGluc"></div>
+      <div class="full"><label>Notes (leader factory count, soccer stage, Joanne's question, etc.)</label><textarea id="qNotes" rows="2"></textarea></div>
+    </div>
+    <button class="btn" onclick="saveQuarter()">Save entry</button>
+  </div>
+
+  <div class="card">
+    <h2>Net worth vs. plan</h2>
+    <div class="nw" id="nwNow">—</div>
+    <div class="nwsub">household (incl. Joanne) · personal in table below</div>
+    <div id="milestones"></div>
+  </div>
+
+  <div class="card">
+    <h2>History</h2>
+    <div style="overflow-x:auto"><table id="qTable"></table></div>
+    <div class="io">
+      <button class="btn secondary" onclick="exportData()">Export JSON</button>
+      <button class="btn secondary" onclick="document.getElementById('importFile').click()">Import JSON</button>
+      <input type="file" id="importFile" style="display:none" accept=".json" onchange="importData(event)">
+    </div>
+    <div class="hint">Data lives in this browser's localStorage — nothing is uploaded anywhere. Export a JSON backup after each quarterly entry and keep it somewhere safe.</div>
+  </div>
+</div>
+
+<script>
+const KEY='rh_scoreboard_v1';
+const DAYS=['M','T','W','T','F','S','S'];
+const MILESTONES=[[2028,4.3],[2031,5.6],[2034,6.8],[2036,8.0],[2039,10.0]];
+let state=load(); let weekOffset=0;
+
+function load(){ try{return JSON.parse(localStorage.getItem(KEY))||{weeks:{},quarters:[]};}catch(e){return {weeks:{},quarters:[]};} }
+function persist(){ localStorage.setItem(KEY,JSON.stringify(state)); }
+
+function mondayOf(d){ const x=new Date(d); const day=(x.getDay()+6)%7; x.setDate(x.getDate()-day); x.setHours(0,0,0,0); return x; }
+function curWeekKey(){ const m=mondayOf(new Date()); m.setDate(m.getDate()+weekOffset*7); return m.toISOString().slice(0,10); }
+function week(){
+  const k=curWeekKey();
+  if(!state.weeks[k]) state.weeks[k]={sc:[0,0,0,0,0,0,0],bed:[0,0,0,0,0,0,0],z13b:[0,0,0,0,0,0,0,0],z45:[0,0],stb:[0,0,0,0,0,0,0,0],brok:[0],hysa:[0],sleep:''};
+  const w=state.weeks[k];
+  if(!Array.isArray(w.z45)) w.z45=[0,0];
+  if(!Array.isArray(w.z13b)) w.z13b=[0,0,0,0,0,0,0,0];
+  if(!Array.isArray(w.stb)) w.stb=[0,0,0,0,0,0,0,0];
+  if(!Array.isArray(w.brok)) w.brok=[0];
+  if(!Array.isArray(w.hysa)) w.hysa=[0];
+  return w;
+}
+
+function sleepTargetFor(dateStr){
+  if(dateStr<'2026-11-01') return 6.25;
+  if(dateStr<'2027-07-01') return 6.5;
+  return 6.75;
+}
+function fmtTarget(h){ const m=Math.round((h%1)*60); return Math.floor(h)+':'+String(m).padStart(2,'0'); }
+function parseSleep(s){ const m=s.match(/^(\d+):(\d\d)$/); return m? (+m[1]+(+m[2])/60) : null; }
+
+function showTab(t){
+  document.getElementById('paneW').style.display = t==='w'?'':'none';
+  document.getElementById('paneQ').style.display = t==='q'?'':'none';
+  document.getElementById('tabW').classList.toggle('active',t==='w');
+  document.getElementById('tabQ').classList.toggle('active',t==='q');
+  if(t==='q') renderQ();
+}
+function shiftWeek(d){ weekOffset+=d; renderW(); }
+
+function boxSet(elId, arr, field){
+  const el=document.getElementById(elId); el.innerHTML='';
+  arr.forEach((v,i)=>{
+    const b=document.createElement('div'); b.className='box'+(v?' on':''); b.textContent=v?'✓':'';
+    b.onclick=()=>{ week()[field][i]=v?0:1; persist(); renderW(); };
+    el.appendChild(b);
+  });
+}
+
+function renderW(){
+  const w=week(); const k=curWeekKey();
+  const mon=new Date(k+'T00:00:00'); const sun=new Date(mon); sun.setDate(sun.getDate()+6);
+  const f=d=>d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  document.getElementById('weekLabel').textContent=(weekOffset===0?'This week · ':'')+f(mon)+' – '+f(sun);
+
+  const g=document.getElementById('dayGrid'); g.innerHTML='<div></div>'+DAYS.map(d=>`<div class="hd">${d}</div>`).join('');
+  [['Slow-carb day','sc'],['In bed by alarm','bed']].forEach(([label,field])=>{
+    g.insertAdjacentHTML('beforeend',`<div class="rowlabel">${label}</div>`);
+    w[field].forEach((v,i)=>{
+      const c=document.createElement('div'); c.className='cell'+(v?' on':''); c.textContent=v?'✓':'';
+      c.onclick=()=>{ week()[field][i]=v?0:1; persist(); renderW(); };
+      g.appendChild(c);
+    });
+  });
+
+  boxSet('z13boxes',w.z13b,'z13b'); boxSet('z45boxes',w.z45,'z45'); boxSet('stboxes',w.stb,'stb');
+  boxSet('brokbox',w.brok,'brok'); boxSet('hysabox',w.hysa,'hysa');
+  renderTodos();
+
+  const sum0=a=>a.reduce((x,y)=>x+y,0);
+  const cnt=(id,arr)=>{ const el=document.getElementById(id); const m=sum0(arr)*15;
+    el.textContent=m+' min'; el.style.color = m>=120?'var(--green)':'var(--muted)'; };
+  cnt('z13Count',w.z13b); cnt('stCount',w.stb);
+
+  const tgt=sleepTargetFor(k);
+  document.getElementById('sleepTarget').textContent='target ≥'+fmtTarget(tgt)+' (Whoop-measured)';
+  const si=document.getElementById('sleepInput'); si.value=w.sleep;
+  const sh=parseSleep(w.sleep); const flag=document.getElementById('sleepFlag');
+  flag.textContent = sh==null?'':(sh>=tgt?'✓ on target':'✗ below target — this is the headline');
+  flag.style.color = sh==null?'':(sh>=tgt?'var(--green)':'var(--red)');
+
+  // score
+  const sum=a=>a.reduce((x,y)=>x+y,0);
+  let hits=0, total=7;
+  if(sum(w.sc)>=6)hits++; if(sum(w.bed)>=5)hits++;
+  if(sum(w.z13b)>=8)hits++; if(sum(w.z45)>=2)hits++; if(sum(w.stb)>=8)hits++;
+  if(sh!=null&&sh>=tgt)hits++;
+  if(w.brok[0]&&w.hysa[0])hits++;
+  const v=document.getElementById('verdict');
+  const pct=Math.round(hits/total*100);
+  v.innerHTML=`Week score: <span class="${pct>=75?'score-good':pct>=50?'score-mid':'score-bad'}">${hits}/${total} targets (${pct}%)</span>`;
+}
+
+function saveSleep(){ week().sleep=document.getElementById('sleepInput').value.trim(); persist(); renderW(); }
+
+// ---------- Financial to-dos (one-time) ----------
+const TODOS=[
+  ['cc','Pay off remaining credit card balance (~$13K) from the HELOC’s spare capacity — track renovation vs. payoff dollars separately for the interest deduction'],
+  ['hysa','Open a HYSA (Marcus / Ally / Wealthfront) and set the $400/mo autotransfer — stop at $25–40K'],
+  ['brok','Open a joint taxable brokerage (Vanguard / Fidelity / Schwab) and set $1,966/mo auto-invest into VTI/VXUS 70/30 or VT'],
+  ['x529','Cut 529 contributions to $833/mo combined ($10K/yr, the NJ deduction cap); plan to stop each kid’s before they turn 17 (SECURE 2.0 rollover rule)'],
+  ['x457','Ask KIPP HR: is there a 457(b)? If yes, +$23.5K/yr of pre-tax space per person'],
+  ['ramp','Set a fall 2028 calendar reminder: ramp both 403(b)s to max for the 2029 plan year'],
+  ['estate','Estate plan: wills, beneficiaries, and the trust conversation (the “before 55” item)'],
+  ['ins','Term life + umbrella liability checkup — confirm coverage matches a $630K-income household with a mortgage and two teenagers'],
+  ['planner','One-time fee-only planner engagement to validate the whole structure (~$3–5K)']
+];
+function renderTodos(){
+  if(!state.todos) state.todos={};
+  const el=document.getElementById('todoList'); el.innerHTML='';
+  TODOS.forEach(([id,label])=>{
+    const done=!!state.todos[id];
+    const row=document.createElement('div'); row.className='checkrow';
+    row.innerHTML=`<span style="${done?'text-decoration:line-through;color:var(--muted)':''};font-size:.85rem;padding-right:10px">${label}</span>`;
+    const b=document.createElement('div'); b.className='box'+(done?' on':''); b.textContent=done?'✓':'';
+    b.style.flexShrink='0';
+    b.onclick=()=>{ state.todos[id]=!done; persist(); renderTodos(); };
+    row.appendChild(b); el.appendChild(row);
+  });
+}
+
+// ---------- Quarterly ----------
+function num(id){ return parseFloat(document.getElementById(id).value)||0; }
+function val(id){ return document.getElementById(id).value.trim(); }
+
+function saveQuarter(){
+  const e={
+    date:val('qDate')||new Date().toISOString().slice(0,10),
+    home:num('qHome'), mort:num('qMort'), cash:num('qCash'), cc:num('qCC'),
+    brok:num('qBrok'), b403:num('q403'), z529:num('q529z'), j529:num('q529j'), jo:num('qJo'),
+    wt:num('qWt'), bf:num('qBF'), dl:num('qDL'), bench:num('qBench'), squat:num('qSquat'),
+    pull:num('qPull'), push:num('qPush'), plank:val('qPlank'), row:val('qRow'), mile:val('qMile'),
+    hang:val('qHang'), cooper:num('qCooper'), gluc:num('qGluc'), notes:val('qNotes')
+  };
+  e.personal = e.home - e.mort + e.cash - e.cc + e.brok + e.b403 + e.z529 + e.j529;
+  e.household = e.personal + e.jo;
+  state.quarters.push(e); state.quarters.sort((a,b)=>a.date<b.date?-1:1); persist(); renderQ();
+  document.querySelectorAll('#paneQ input, #paneQ textarea').forEach(i=>{ if(i.type!=='date') i.value=''; });
+}
+
+function money(n){ return n? '$'+(n/1e6).toFixed(2)+'M' : '—'; }
+
+function renderQ(){
+  document.getElementById('qDate').value=new Date().toISOString().slice(0,10);
+  const qs=state.quarters;
+  const last=qs[qs.length-1];
+  document.getElementById('nwNow').textContent = last? money(last.household) : '—';
+
+  const ms=document.getElementById('milestones'); ms.innerHTML='';
+  MILESTONES.forEach(([yr,tgt])=>{
+    const cur=last? last.household/1e6 : 0;
+    const done = cur>=tgt;
+    ms.insertAdjacentHTML('beforeend',
+      `<div class="milestone"><span>End of ${yr}</span><span style="color:${done?'var(--green)':'var(--muted)'}">${done?'✓ ':''}$${tgt.toFixed(1)}M</span></div>`);
+  });
+
+  const t=document.getElementById('qTable');
+  t.innerHTML='<tr><th>Date</th><th>Personal</th><th>Household</th><th>BF%</th><th>Wt</th><th>DL</th><th>Mile</th><th>Row</th><th>Pull</th><th>Cooper</th><th>Gluc</th></tr>';
+  qs.slice().reverse().forEach(e=>{
+    t.insertAdjacentHTML('beforeend',
+      `<tr><td>${e.date}</td><td>${money(e.personal)}</td><td>${money(e.household)}</td><td>${e.bf||'—'}</td><td>${e.wt||'—'}</td><td>${e.dl||'—'}</td><td>${e.mile||'—'}</td><td>${e.row||'—'}</td><td>${e.pull||'—'}</td><td>${e.cooper||'—'}</td><td>${e.gluc||'—'}</td></tr>`);
+  });
+}
+
+function exportData(){
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download='rh-scoreboard-backup-'+new Date().toISOString().slice(0,10)+'.json'; a.click();
+}
+function importData(ev){
+  const f=ev.target.files[0]; if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{ try{ state=JSON.parse(r.result); persist(); renderW(); renderQ(); alert('Imported.'); }catch(e){ alert('Invalid file.'); } };
+  r.readAsText(f);
+}
+
+renderW();
+</script>
+</body>
+</html>
