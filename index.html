@@ -186,14 +186,14 @@
 
 <script>
 const KEY='rh_scoreboard_v1';
-const DAYS=['M','T','W','T','F','S','S'];
+const DAYS=['S','M','T','W','T','F','S'];
 const MILESTONES=[[2028,4.3],[2031,5.6],[2034,6.8],[2036,8.0],[2039,10.0]];
 let state=load(); let weekOffset=0;
 
 function load(){ try{return JSON.parse(localStorage.getItem(KEY))||{weeks:{},quarters:[]};}catch(e){return {weeks:{},quarters:[]};} }
 function persist(){ localStorage.setItem(KEY,JSON.stringify(state)); }
 
-function mondayOf(d){ const x=new Date(d); const day=(x.getDay()+6)%7; x.setDate(x.getDate()-day); x.setHours(0,0,0,0); return x; }
+function mondayOf(d){ const x=new Date(d); const day=x.getDay(); x.setDate(x.getDate()-day); x.setHours(0,0,0,0); return x; } // week starts Sunday
 function curWeekKey(){ const m=mondayOf(new Date()); m.setDate(m.getDate()+weekOffset*7); return m.toISOString().slice(0,10); }
 function week(){
   const k=curWeekKey();
